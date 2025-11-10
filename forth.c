@@ -96,12 +96,21 @@ tfobj *createListObject(void) {
 }
 
 /* Add the new element at the end of the list 'l'.
- * It is up to the caller to incremente the reference count of the
+ * It is up to the caller to increment the reference count of the
  * element added to the list if needed. */
 void listPush(tfobj *l, tfobj *ele) {
     l->list.ele = realloc(l->list.ele, sizeof(tfobj*) * (l->list.len+1));
     l->list.ele[l->list.len] = ele;
     l->list.len++;
+}
+
+/* Remove the last element from the list and return it.
+ * It is up to the caller to decrement the reference count of the
+ * element popped from the list if needed. */
+tfobj *listPop(tfobj *l) {
+    tfobj *last = l->list.ele[l->list.len-1];
+    l->list.len--;
+    return last;
 }
 
 /* ============== Turn program into toy forth list ================ */
@@ -210,7 +219,38 @@ void print_object(tfobj *o) {
 }
 
 void exec(tfobj *prg) {
-    print_object(prg);
+    tfctx ctx;
+    ctx.stack = createListObject();
+    for (size_t j = 0; j < prg->list.len; j++) {
+        tfobj *ele = prg->list.ele[j];
+        switch (ele->type) {
+        case TFOBJ_TYPE_SYMBOL: {
+            char *sym = ele->str.ptr;
+            if (strcmp(sym, "print") == 0) {
+                print_object(ctx.stack);
+            } else if (is_symbol_char(sym[0])) {
+                // FIXME: decrement reference counters and free memory
+                tfobj *b = listPop(ctx.stack);
+                tfobj *a = listPop(ctx.stack);
+                if (strcmp(sym, "+") == 0) {
+                    listPush(ctx.stack, createIntObject(a->i+b->i));
+                } else if (strcmp(sym, "-") == 0) {
+                    listPush(ctx.stack, createIntObject(a->i-b->i));
+                } else if (strcmp(sym, "*") == 0) {
+                    listPush(ctx.stack, createIntObject(a->i*b->i));
+                } else if (strcmp(sym, "/") == 0) {
+                    listPush(ctx.stack, createIntObject(a->i/b->i));
+                } else if (strcmp(sym, "%") == 0) {
+                    listPush(ctx.stack, createIntObject(a->i%b->i));
+                }
+            }
+            break;
+        }
+        default:
+            listPush(ctx.stack, ele);
+            break;
+        }
+    }
 }
 
 /* ============================ Main ============================== */
@@ -227,15 +267,16 @@ int main(int argc, char **argv) {
         return 1;
     }
     off_t file_size = lseek(fd, 0, SEEK_END);
-    fprintf(stdout,"Source file size: %lld\n", file_size);
+    // fprintf(stdout,"Source file size: %lld\n", file_size);
     char *prgtext = xmalloc(file_size+1);
     lseek(fd, 0, SEEK_SET);
     read(fd, prgtext, file_size);
     prgtext[file_size] = 0;
     close(fd);
-    fprintf(stdout,"Program text: \"%s\"\n", prgtext);
+    // fprintf(stdout,"Program text: \"%s\"\n", prgtext);
 
     tfobj *prg = compile(prgtext);
+    // print_object(prg);
     exec(prg);
     return 0;
 }
