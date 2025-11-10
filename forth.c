@@ -235,17 +235,16 @@ void exec(tfobj *prg) {
                 // FIXME: decrement reference counters and free memory
                 tfobj *b = listPop(ctx.stack);
                 tfobj *a = listPop(ctx.stack);
-                if (strcmp(sym, "+") == 0) {
+                if (strcmp(sym, "+") == 0)
                     listPush(ctx.stack, createIntObject(a->i+b->i));
-                } else if (strcmp(sym, "-") == 0) {
+                else if (strcmp(sym, "-") == 0)
                     listPush(ctx.stack, createIntObject(a->i-b->i));
-                } else if (strcmp(sym, "*") == 0) {
+                else if (strcmp(sym, "*") == 0)
                     listPush(ctx.stack, createIntObject(a->i*b->i));
-                } else if (strcmp(sym, "/") == 0) {
+                else if (strcmp(sym, "/") == 0)
                     listPush(ctx.stack, createIntObject(a->i/b->i));
-                } else if (strcmp(sym, "%") == 0) {
+                else if (strcmp(sym, "%") == 0)
                     listPush(ctx.stack, createIntObject(a->i%b->i));
-                }
             }
             break;
         }
@@ -271,16 +270,13 @@ int main(int argc, char **argv) {
         return 1;
     }
     off_t file_size = lseek(fd, 0, SEEK_END);
-    // fprintf(stdout,"Source file size: %lld\n", file_size);
     char *prgtext = xmalloc(file_size+1);
     lseek(fd, 0, SEEK_SET);
     read(fd, prgtext, file_size);
     prgtext[file_size] = 0;
     close(fd);
-    // fprintf(stdout,"Program text: \"%s\"\n", prgtext);
 
     tfobj *prg = compile(prgtext);
-    // print_object(prg);
     exec(prg);
     return 0;
 }
