@@ -226,31 +226,25 @@ void exec(tfobj *prg) {
     ctx.stack = createListObject();
     for (size_t j = 0; j < prg->list.len; j++) {
         tfobj *ele = prg->list.ele[j];
-        switch (ele->type) {
-        case TFOBJ_TYPE_SYMBOL: {
+        if (ele->type == TFOBJ_TYPE_SYMBOL) {
             char *sym = ele->str.ptr;
             if (strcmp(sym, "print") == 0) {
                 print_object(ctx.stack);
-            } else if (is_symbol_char(sym[0])) {
-                // FIXME: decrement reference counters and free memory
+            } else if (ele->str.len == 1 && is_symbol_char(sym[0])) {
                 tfobj *b = listPop(ctx.stack);
                 tfobj *a = listPop(ctx.stack);
-                if (strcmp(sym, "+") == 0)
-                    listPush(ctx.stack, createIntObject(a->i+b->i));
-                else if (strcmp(sym, "-") == 0)
-                    listPush(ctx.stack, createIntObject(a->i-b->i));
-                else if (strcmp(sym, "*") == 0)
-                    listPush(ctx.stack, createIntObject(a->i*b->i));
-                else if (strcmp(sym, "/") == 0)
-                    listPush(ctx.stack, createIntObject(a->i/b->i));
-                else if (strcmp(sym, "%") == 0)
-                    listPush(ctx.stack, createIntObject(a->i%b->i));
+                // FIXME: decrement reference counters and free memory
+                switch (sym[0]) {
+                case '+': listPush(ctx.stack, createIntObject(a->i+b->i)); break;
+                case '-': listPush(ctx.stack, createIntObject(a->i-b->i)); break;
+                case '*': listPush(ctx.stack, createIntObject(a->i*b->i)); break;
+                case '/': listPush(ctx.stack, createIntObject(a->i/b->i)); break;
+                case '%': listPush(ctx.stack, createIntObject(a->i%b->i)); break;
+                default: break;
+                }
             }
-            break;
-        }
-        default:
+        } else {
             listPush(ctx.stack, ele);
-            break;
         }
     }
 }
