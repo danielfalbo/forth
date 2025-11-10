@@ -117,9 +117,7 @@ tfobj *listPop(tfobj *l) {
 /* ============== Turn program into toy forth list ================ */
 
 void parseSpaces(tfparser *parser) {
-    while (isspace(parser->p[0])) {
-        parser->p++;
-    }
+    while (isspace(parser->p[0])) parser->p++;
 }
 
 #define MAX_NUM_LEN 128
