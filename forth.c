@@ -210,8 +210,10 @@ void print_object(tfobj *o) {
         fprintf(stdout, "%s", o->str.ptr);
         break;
     case TFOBJ_TYPE_STR:
+        // TODO:
         break;
     case TFOBJ_TYPE_BOOL:
+        // TODO:
         break;
     default:
         fprintf(stdout, "?");
@@ -228,18 +230,25 @@ void exec(tfobj *prg) {
             char *sym = ele->str.ptr;
             if (strcmp(sym, "print") == 0) {
                 print_object(ctx.stack);
+            } else if (strcmp(sym, "dup") == 0) {
+                // TODO: listPush deep copy of last element.
+            } else if (strcmp(sym, "if") == 0) {
+                // TODO:
             } else if (ele->str.len == 1 && is_symbol_char(sym[0])) {
+                // NOTE: Assumes the last 2 objects of the stack are TFOBJ_TYPE_INTs
+                // TODO: check object types, implement < > = support for bools
+                // FIXME: decrement reference counters of `b` and free memory.
                 tfobj *b = listPop(ctx.stack);
                 tfobj *a = listPop(ctx.stack);
-                // FIXME: decrement reference counters and free memory
                 switch (sym[0]) {
-                case '+': listPush(ctx.stack, createIntObject(a->i+b->i)); break;
-                case '-': listPush(ctx.stack, createIntObject(a->i-b->i)); break;
-                case '*': listPush(ctx.stack, createIntObject(a->i*b->i)); break;
-                case '/': listPush(ctx.stack, createIntObject(a->i/b->i)); break;
-                case '%': listPush(ctx.stack, createIntObject(a->i%b->i)); break;
+                case '+': a->i = a->i+b->i; break;
+                case '-': a->i = a->i-b->i; break;
+                case '*': a->i = a->i*b->i; break;
+                case '/': a->i = a->i/b->i; break;
+                case '%': a->i = a->i%b->i; break;
                 default: break;
                 }
+                listPush(ctx.stack, a);
             }
         } else {
             listPush(ctx.stack, ele);
