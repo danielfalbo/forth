@@ -104,7 +104,7 @@ void listPush(tfobj *l, tfobj *ele) {
 
 /* ============== Turn program into toy forth list ================ */
 void parseSpaces(tfparser *parser) {
-    while (isblank(parser->p[0])) {
+    while (isspace(parser->p[0])) {
         parser->p++;
     }
 }
