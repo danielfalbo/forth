@@ -88,6 +88,7 @@ tfobj *createBoolObject(int i) {
 }
 
 /* ===================== List object ============================== */
+
 tfobj *createListObject(void) {
     tfobj *o = createObject(TFOBJ_TYPE_LIST);
     o->list.ele = NULL;
@@ -114,6 +115,7 @@ tfobj *listPop(tfobj *l) {
 }
 
 /* ============== Turn program into toy forth list ================ */
+
 void parseSpaces(tfparser *parser) {
     while (isspace(parser->p[0])) {
         parser->p++;
@@ -190,7 +192,8 @@ tfobj *compile(char *prgtext) {
     return parsed;
 }
 
-/* =============== Execute the program ============================ */
+/* ===================== Execute the program ====================== */
+
 void print_object(tfobj *o) {
     switch (o->type) {
     case TFOBJ_TYPE_INT:
@@ -254,6 +257,7 @@ void exec(tfobj *prg) {
 }
 
 /* ============================ Main ============================== */
+
 int main(int argc, char **argv) {
     if (argc != 2) {
         fprintf(stderr, "Usage: %s <filename>\n", argv[0]);
