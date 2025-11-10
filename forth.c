@@ -62,8 +62,10 @@ tfobj *createObject(int type) {
 
 tfobj *createStringObject(char *s, size_t len) {
     tfobj *o = createObject(TFOBJ_TYPE_STR);
-    o->str.ptr = s;
+    o->str.ptr = xmalloc(len+1);
     o->str.len = len;
+    memcpy(o->str.ptr, s, len);
+    o->str.ptr[len] = 0;
     return o;
 }
 
@@ -115,10 +117,7 @@ tfobj *parseNumber(tfparser *parser) {
     char *start = parser->p;
     char *end;
 
-    if (parser->p[0] == '-') {
-        // TODO: keep track that this is negative
-        parser->p++;
-    }
+    if (parser->p[0] == '-') parser->p++;
     while (parser->p[0] && isdigit(parser->p[0])) parser->p++;
     end = parser->p;
     int numlen = end-start;
@@ -130,6 +129,22 @@ tfobj *parseNumber(tfparser *parser) {
     tfobj *o = createIntObject(atoi(buf));
     return o;
 }
+
+/* Return true if the character 'c' is one of the characters
+ * acceptable for our symbols. */
+int is_symbol_char(int c) {
+    char symchars[] = "+-/%*";
+    return isalpha(c) || strchr(symchars, c) != NULL;
+}
+
+tfobj *parseSymbol(tfparser *parser) {
+    char *start = parser->p;
+    while (parser->p[0] && is_symbol_char(parser->p[0])) parser->p++;
+    char *end = parser->p;
+    int len = end-start;
+    return createSymbolObject(start, len);
+}
+
 
 tfobj *compile(char *prgtext) {
     tfparser parser;
@@ -148,6 +163,8 @@ tfobj *compile(char *prgtext) {
         if (isdigit(parser.p[0])
             || (parser.p[0] == '-' && isdigit(parser.p[1]))) {
             o = parseNumber(&parser);
+        } else if (is_symbol_char(parser.p[0])) {
+            o = parseSymbol(&parser);
         } else {
             o = NULL;
         }
@@ -165,19 +182,31 @@ tfobj *compile(char *prgtext) {
 }
 
 /* =============== Execute the program ============================ */
-void exec(tfobj *prg) {
-    fprintf(stdout, "[");
-    for (size_t j = 0; j < prg->list.len; j++) {
-        tfobj *o = prg->list.ele[j];
-        switch (o->type) {
-        case TFOBJ_TYPE_INT:
-            fprintf(stdout, "%d", o->i);
-            break;
-        default: fprintf(stdout, "?");
+void print_object(tfobj *o) {
+    switch (o->type) {
+    case TFOBJ_TYPE_INT:
+        fprintf(stdout, "%d", o->i);
+        break;
+    case TFOBJ_TYPE_LIST:
+        fprintf(stdout, "[");
+        for (size_t j = 0; j < o->list.len; j++) {
+            tfobj *ele = o->list.ele[j];
+            print_object(ele);
+            fprintf(stdout, " ");
         }
-        fprintf(stdout, " ");
+        fprintf(stdout, "]");
+        break;
+    case TFOBJ_TYPE_SYMBOL:
+        fprintf(stdout, "%s", o->str.ptr);
+        break;
+    case TFOBJ_TYPE_STR:
+        break;
+    case TFOBJ_TYPE_BOOL:
+        break;
+    default:
+        fprintf(stdout, "?");
+        break;
     }
-    fprintf(stdout, "]");
 }
 
 /* ============================ Main ============================== */
@@ -203,6 +232,6 @@ int main(int argc, char **argv) {
     fprintf(stdout,"Program text: \"%s\"\n", prgtext);
 
     tfobj *prg = compile(prgtext);
-    exec(prg);
+    print_object(prg);
     return 0;
 }
