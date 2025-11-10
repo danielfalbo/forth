@@ -1,7 +1,7 @@
 all: forth
 
-btree: forth.c
-	$(CC) -o btree btree.c -Wall -W -pedantic -std=c99 -O3
+forth: forth.c
+	gcc -o forth forth.c -Wall -W -O2
 
 clean:
 	rm forth
