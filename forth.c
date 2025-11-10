@@ -209,6 +209,10 @@ void print_object(tfobj *o) {
     }
 }
 
+void exec(tfobj *prg) {
+    print_object(prg);
+}
+
 /* ============================ Main ============================== */
 int main(int argc, char **argv) {
     if (argc != 2) {
@@ -232,6 +236,6 @@ int main(int argc, char **argv) {
     fprintf(stdout,"Program text: \"%s\"\n", prgtext);
 
     tfobj *prg = compile(prgtext);
-    print_object(prg);
+    exec(prg);
     return 0;
 }
