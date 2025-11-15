@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <ctype.h>
 #include <strings.h>
+#include <assert.h>
 
 /* ======================== Data structures ======================= */
 
@@ -21,6 +22,7 @@ typedef struct tfobj {
         struct {
             char *ptr;
             size_t len;
+            // TODO: int quoted; // True or false
         } str;
         struct {
             struct tfobj **ele;
@@ -34,9 +36,26 @@ typedef struct tfparser {
     char *p;       // Next token to parse.
 } tfparser;
 
-typedef struct {
+typedef struct tfctx tfctx;
+
+/* Function table entry: each of this entry represents a symbol name
+ * associated with a function implementation. */
+typedef struct FunctionTableEntry {
+    tfobj *name;
+    void (*callback) (tfctx *ctx, tfobj *name);
+    tfobj *userList;
+} FunctionTableEntry;
+
+typedef struct FunctionTable {
+    FunctionTableEntry **func_table;
+    size_t func_count;
+} FunctionTable;
+
+/* Our execution context. */
+struct tfctx {
     tfobj *stack;
-} tfctx;
+    FunctionTable functable;
+};
 
 /* =================== Allocation wrappers ======================== */
 
@@ -44,6 +63,15 @@ void *xmalloc(size_t size) {
     void *ptr = malloc(size);
     if (ptr == NULL) {
         fprintf(stderr, "Out of memory allocating %zu bytes\n", size);
+        exit(1);
+    }
+    return ptr;
+}
+
+void *xrealloc(void *oldptr, size_t size) {
+    void *ptr = realloc(oldptr, size);
+    if (ptr == NULL) {
+        fprintf(stderr, "Out of memory reallocating %zu bytes\n", size);
         exit(1);
     }
     return ptr;
@@ -87,6 +115,64 @@ tfobj *createBoolObject(int i) {
     return o;
 }
 
+void retain(tfobj *o) {
+    o->refcount++;
+}
+
+void freeObject(tfobj *o);
+
+void release(tfobj *o) {
+    assert(o->refcount > 0);
+    o->refcount--;
+    if (o->refcount == 0) freeObject(o);
+}
+
+/* Free an object and all the other nested objects. */
+void freeObject(tfobj *o) {
+    assert (o->refcount == 0);
+
+    switch (o->type) {
+    case TFOBJ_TYPE_LIST:
+        for (size_t j = 0; j < o->list.len; j++) {
+            tfobj *ele = o->list.ele[j];
+            release(ele);
+        }
+        break;
+    case TFOBJ_TYPE_SYMBOL:
+    case TFOBJ_TYPE_STR:
+        free(o->str.ptr);
+        break;
+    }
+    free(o);
+}
+
+void printObject(tfobj *o) {
+    switch (o->type) {
+    case TFOBJ_TYPE_BOOL:
+    case TFOBJ_TYPE_INT:
+        fprintf(stdout, "%d", o->i);
+        break;
+    case TFOBJ_TYPE_LIST:
+        fprintf(stdout, "[");
+        for (size_t j = 0; j < o->list.len; j++) {
+            tfobj *ele = o->list.ele[j];
+            printObject(ele);
+            if (j != o->list.len - 1) fprintf(stdout, " ");
+        }
+        fprintf(stdout, "]\n");
+        break;
+    case TFOBJ_TYPE_STR:
+        fprintf(stdout, "\"%s\"", o->str.ptr);
+        break;
+    case TFOBJ_TYPE_SYMBOL:
+        fprintf(stdout, "%s", o->str.ptr);
+        break;
+    default:
+        fprintf(stdout, "?");
+        break;
+    }
+}
+
 /* ===================== List object ============================== */
 
 tfobj *createListObject(void) {
@@ -100,7 +186,7 @@ tfobj *createListObject(void) {
  * It is up to the caller to increment the reference count of the
  * element added to the list if needed. */
 void listPush(tfobj *l, tfobj *ele) {
-    l->list.ele = realloc(l->list.ele, sizeof(tfobj*) * (l->list.len+1));
+    l->list.ele = xrealloc(l->list.ele, sizeof(tfobj*) * (l->list.len+1));
     l->list.ele[l->list.len] = ele;
     l->list.len++;
 }
@@ -141,14 +227,14 @@ tfobj *parseNumber(tfparser *parser) {
 
 /* Return true if the character 'c' is one of the characters
  * acceptable for our symbols. */
-int is_symbol_char(int c) {
+int isSymbolChar(int c) {
     char symchars[] = "+-/%*";
     return isalpha(c) || strchr(symchars, c) != NULL;
 }
 
 tfobj *parseSymbol(tfparser *parser) {
     char *start = parser->p;
-    while (parser->p[0] && is_symbol_char(parser->p[0])) parser->p++;
+    while (parser->p[0] && isSymbolChar(parser->p[0])) parser->p++;
     char *end = parser->p;
     int len = end-start;
     return createSymbolObject(start, len);
@@ -172,7 +258,7 @@ tfobj *compile(char *prgtext) {
         if (isdigit(parser.p[0])
             || (parser.p[0] == '-' && isdigit(parser.p[1]))) {
             o = parseNumber(&parser);
-        } else if (is_symbol_char(parser.p[0])) {
+        } else if (isSymbolChar(parser.p[0])) {
             o = parseSymbol(&parser);
         } else {
             o = NULL;
@@ -180,7 +266,7 @@ tfobj *compile(char *prgtext) {
 
         // Check if the current token produced a parsing error.
         if (o == NULL) {
-            // FIXME: release parsed here.
+            release(parsed);
             fprintf(stderr, "Syntax error near %32s ... \n", token_start);
             return NULL;
         } else {
@@ -190,68 +276,71 @@ tfobj *compile(char *prgtext) {
     return parsed;
 }
 
-/* ===================== Execute the program ====================== */
+/* ===================== Execution and context ==================== */
 
-void print_object(tfobj *o) {
-    switch (o->type) {
-    case TFOBJ_TYPE_INT:
-        fprintf(stdout, "%d", o->i);
-        break;
-    case TFOBJ_TYPE_LIST:
-        fprintf(stdout, "[");
-        for (size_t j = 0; j < o->list.len; j++) {
-            tfobj *ele = o->list.ele[j];
-            print_object(ele);
-            fprintf(stdout, " ");
-        }
-        fprintf(stdout, "]");
-        break;
-    case TFOBJ_TYPE_SYMBOL:
-        fprintf(stdout, "%s", o->str.ptr);
-        break;
-    case TFOBJ_TYPE_STR:
-        // TODO:
-        break;
-    case TFOBJ_TYPE_BOOL:
-        // TODO:
-        break;
-    default:
-        fprintf(stdout, "?");
-        break;
-    }
+void basicMathFunctions(tfctx *ctx, char *name) {
 }
 
-void exec(tfobj *prg) {
-    tfctx ctx;
-    ctx.stack = createListObject();
+void registerFunction(tfctx *ctx, char *name,
+                      void (*callback) (tfctx *ctx, char *name)
+) {
+}
+
+tfctx *createContext(void) {
+    tfctx *ctx = xmalloc(sizeof(*ctx));
+    ctx->stack = createListObject();
+    ctx->functable.func_table = NULL;
+    ctx->functable.func_count = 0;
+    registerFunction(ctx, "+", basicMathFunctions);
+    // registerUserFunction();
+    return ctx;
+}
+
+/* Try to resolve and call the function associated with the symbol
+ * name 'word'. Return 0 if the symbol was actually bound to some
+ * function, return 1 otherwise. */
+int callSymbol(tfctx *ctx, tfobj *word) {
+    // Scan function table from ctx
+
+    // char *sym = word->str.ptr;
+    // if (strcmp(sym, "print") == 0) {
+    //     printObject(ctx->stack);
+    // } else if (strcmp(sym, "dup") == 0) {
+    //     // TODO: listPush deep copy of last word.
+    // } else if (strcmp(sym, "if") == 0) {
+    //     // TODO:
+    // } else if (word->str.len == 1 && isSymbolChar(sym[0])) {
+    //     // NOTE: Assumes the last 2 objects of the stack are TFOBJ_TYPE_INTs
+    //     // TODO: check object types, implement < > = support for bools
+    //     // FIXME: decrement reference counters of `b` and free memory.
+    //     tfobj *b = listPop(ctx->stack);
+    //     tfobj *a = listPop(ctx->stack);
+    //     switch (sym[0]) {
+    //     case '+': a->i = a->i+b->i; break;
+    //     case '-': a->i = a->i-b->i; break;
+    //     case '*': a->i = a->i*b->i; break;
+    //     case '/': a->i = a->i/b->i; break;
+    //     case '%': a->i = a->i%b->i; break;
+    //     default: break;
+    //     }
+    //     listPush(ctx->stack, a);
+    // }
+    return 1;
+}
+
+/* Execute the Toy Forth program stored into the list 'prg'.  */
+void exec(tfctx *ctx, tfobj *prg) {
+    assert(prg->type == TFOBJ_TYPE_LIST);
     for (size_t j = 0; j < prg->list.len; j++) {
-        tfobj *ele = prg->list.ele[j];
-        if (ele->type == TFOBJ_TYPE_SYMBOL) {
-            char *sym = ele->str.ptr;
-            if (strcmp(sym, "print") == 0) {
-                print_object(ctx.stack);
-            } else if (strcmp(sym, "dup") == 0) {
-                // TODO: listPush deep copy of last element.
-            } else if (strcmp(sym, "if") == 0) {
-                // TODO:
-            } else if (ele->str.len == 1 && is_symbol_char(sym[0])) {
-                // NOTE: Assumes the last 2 objects of the stack are TFOBJ_TYPE_INTs
-                // TODO: check object types, implement < > = support for bools
-                // FIXME: decrement reference counters of `b` and free memory.
-                tfobj *b = listPop(ctx.stack);
-                tfobj *a = listPop(ctx.stack);
-                switch (sym[0]) {
-                case '+': a->i = a->i+b->i; break;
-                case '-': a->i = a->i-b->i; break;
-                case '*': a->i = a->i*b->i; break;
-                case '/': a->i = a->i/b->i; break;
-                case '%': a->i = a->i%b->i; break;
-                default: break;
-                }
-                listPush(ctx.stack, a);
-            }
-        } else {
-            listPush(ctx.stack, ele);
+        tfobj *word = prg->list.ele[j];
+        switch (word->type) {
+        case TFOBJ_TYPE_SYMBOL:
+            callSymbol(ctx, word);
+            break;
+        default:
+            listPush(ctx->stack, word);
+            retain(word);
+            break;
         }
     }
 }
@@ -278,6 +367,12 @@ int main(int argc, char **argv) {
     close(fd);
 
     tfobj *prg = compile(prgtext);
-    exec(prg);
+    printObject(prg);
+    tfctx *ctx = createContext();
+
+    exec(ctx, prg);
+
+    fprintf(stdout, "Stack content at end: ");
+    printObject(ctx->stack);
     return 0;
 }
