@@ -473,9 +473,6 @@ int basicMathFunctions(tfctx *ctx, char *name) {
     case '+': result = a->i + b->i; break;
     case '-': result = a->i - b->i; break;
     case '*': result = a->i * b->i; break;
-    case '/': result = a->i / b->i; break;
-    case '%': result = a->i % b->i; break;
-    // default:                        break;
     }
     release(a);
     release(b);
