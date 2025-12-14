@@ -1,9 +1,9 @@
-# Toy Forth interpreter
+# Toy FORTH-like interpreter
 
 ## resources
 
-1. [antirez](https://github.com/antirez)' C programming [course](https://www.youtube.com/playlist?list=PLrEMgOSrS_3cFJpM2gdw8EGFyRBZOyAKY)
+1. [antirez/toyforth](https://github.com/antirez/toyforth)
 
-- [Forth on Wikipedia](https://en.wikipedia.org/wiki/Forth_(programming_language))
+- [Forth](https://wikipedia.org/wiki/Forth_(programming_language)) on Wikipedia
 
 - [WebAssembly Text Format](https://developer.mozilla.org/docs/WebAssembly/Guides/Understanding_the_text_format)
